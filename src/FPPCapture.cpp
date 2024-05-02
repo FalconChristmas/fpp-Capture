@@ -58,7 +58,6 @@ public:
                 uint64_t endMS = GetTimeMS();
                 float timing = (endMS - startMS);
                 timing /= frame;
-                printf("Frames:  %d     Timing:  %f\n", frame, timing);
 
                 FSEQFile *src = FSEQFile::openFSEQFile(fname);
                 V2FSEQFile *dest = (V2FSEQFile*)FSEQFile::createFSEQFile(fname.substr(0, fname.length() - 8),  2, FSEQFile::CompressionType::zstd, 1);
@@ -82,6 +81,8 @@ public:
                 dest->finalize();
                 delete dest;
                 delete src;
+
+                unlink(fname.c_str());
             }
         }
     }
