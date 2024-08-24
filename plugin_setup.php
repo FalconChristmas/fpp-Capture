@@ -1,14 +1,8 @@
 <?php
-// Enable error reporting for troubleshooting
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-// Assume session is already started by Falcon Player
-
 // Include necessary plugin files
 include_once 'functions.inc.php';
 
+$metaFile = '/home/fpp/media/sequences/recording_meta.json';  // Metadata file to store start time
 $fileName = isset($_POST['fileName']) ? $_POST['fileName'] : 'capture_' . date('Ymd_His') . '.fseq';
 $message = '';
 
@@ -17,13 +11,15 @@ $statusData = capturePlugin_getCaptureStatus();
 $isRecording = $statusData['recording'];
 $currentFile = $statusData['file'];
 $fileSize = $statusData['size'] / 1024;  // Convert bytes to kilobytes
-$startTime = isset($_SESSION['startTime']) ? $_SESSION['startTime'] : 0;
 
-// Debugging output: Log session and recording status
-error_log("Session Start Time: " . $startTime);
-error_log("Recording Status: " . ($isRecording ? 'Recording' : 'Not Recording'));
+// Read the metadata file to get the start time
+$startTime = 0;
+if (file_exists($metaFile)) {
+    $metaData = json_decode(file_get_contents($metaFile), true);
+    $startTime = isset($metaData['startTime']) ? $metaData['startTime'] : 0;
+}
 
-// Calculate duration only if start time is valid
+// Calculate duration based on the stored start time
 $duration = ($isRecording && $startTime > 0) ? (time() - $startTime) : 0;
 
 // Convert duration to hours, minutes, and seconds
@@ -37,21 +33,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fileName .= '.fseq';
         }
         if (capturePlugin_startCapture($fileName)) {
-            $_SESSION['startTime'] = time();  // Set start time
+            // Store the start time in the metadata file
+            file_put_contents($metaFile, json_encode(['startTime' => time()]));
             $message = "Recording started. File: $fileName";
-            error_log("Recording started, Start Time Set: " . $_SESSION['startTime']);
         } else {
             $message = "Failed to start recording.";
-            error_log("Failed to start recording.");
         }
     } elseif (isset($_POST['stop'])) {
         if (capturePlugin_stopCapture()) {
             $message = "Recording stopped.";
-            unset($_SESSION['startTime']);  // Clear start time
-            error_log("Recording stopped, Start Time Cleared.");
+            // Remove the metadata file when recording stops
+            if (file_exists($metaFile)) {
+                unlink($metaFile);
+            }
         } else {
             $message = "Failed to stop recording.";
-            error_log("Failed to stop recording.");
         }
     }
 
@@ -61,17 +57,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $currentFile = $statusData['file'];
     $fileSize = $statusData['size'] / 1024;  // Convert bytes to kilobytes
 
-    // Recalculate duration
-    $startTime = isset($_SESSION['startTime']) ? $_SESSION['startTime'] : 0;
+    // Recalculate duration based on the stored start time
+    if (file_exists($metaFile)) {
+        $metaData = json_decode(file_get_contents($metaFile), true);
+        $startTime = isset($metaData['startTime']) ? $metaData['startTime'] : 0;
+    }
     $duration = ($isRecording && $startTime > 0) ? (time() - $startTime) : 0;
 
     // Convert duration to hours, minutes, and seconds
     $hours = floor($duration / 3600);
     $minutes = floor(($duration % 3600) / 60);
     $seconds = $duration % 60;
-
-    // Debugging output: Log recalculated duration
-    error_log("Recalculated Duration: " . $duration . " seconds");
 }
 ?>
 
