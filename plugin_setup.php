@@ -1,4 +1,9 @@
 <?php
+// Enable error reporting for troubleshooting
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // Include necessary plugin files
 include_once 'functions.inc.php';
 
@@ -75,16 +80,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <html>
 <head>
     <title>FPP Capture Plugin</title>
+    <script>
+        function updateStatus() {
+            $.ajax({
+                url: '/plugin.php?plugin=fpp-Capture&page=status_update.php',  // Corrected URL for Falcon Player
+                dataType: 'json',
+                success: function(response) {
+                    console.log('AJAX Response:', response);  // Log the response for debugging
+                    if (response && typeof response === 'object') {
+                        $('#status').text(response.isRecording ? 'Recording' : 'Not Recording');
+                        $('#duration').text(response.duration);
+                        $('#file').text(response.file);
+                        $('#fileSize').text(response.fileSize + ' KB');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('AJAX Error:', status, error);  // Log any AJAX errors
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            updateStatus();  // Initial call to update the status
+            setInterval(updateStatus, 5000);  // Update every 5 seconds
+        });
+    </script>
 </head>
 <body>
 <h2>FPP Capture Plugin</h2>
 <p><?php echo $message; ?></p>
-<p>Current Status: <strong><?php echo $isRecording ? 'Recording' : 'Not Recording'; ?></strong></p>
+<p>Current Status: <strong id="status"><?php echo $isRecording ? 'Recording' : 'Not Recording'; ?></strong></p>
 
 <?php if ($isRecording): ?>
-    <p>Recording Duration: <?php echo sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds); ?></p>
-    <p>Recording File: <?php echo htmlspecialchars($currentFile); ?></p>
-    <p>File Size: <?php echo number_format($fileSize, 2); ?> KB</p>
+    <p>Recording Duration: <span id="duration"><?php echo sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds); ?></span></p>
+    <p>Recording File: <span id="file"><?php echo htmlspecialchars($currentFile); ?></span></p>
+    <p>File Size: <span id="fileSize"><?php echo number_format($fileSize, 2); ?></span> KB</p>
 <?php endif; ?>
 
 <form method="POST">
