@@ -1,6 +1,7 @@
 <?php
 
-function sendRestCommand($command, $args = []) {
+// Function to send REST commands to the FPP API
+function capturePlugin_sendRestCommand($command, $args = []) {
     $url = "http://localhost/api/command";  // Update with the correct FPP API URL if different
 
     // Create the JSON payload
@@ -35,38 +36,42 @@ function sendRestCommand($command, $args = []) {
     return $httpCode === 200;
 }
 
-function startCapture($fileName) {
+// Function to start the FSEQ capture recording
+function capturePlugin_startCapture($fileName) {
     // Send the FSEQ Capture Start command with the file name as an argument
-    return sendRestCommand("FSEQ Capture Start", [$fileName]);
+    return capturePlugin_sendRestCommand("FSEQ Capture Start", [$fileName]);
 }
 
-function stopCapture() {
+// Function to stop the FSEQ capture recording
+function capturePlugin_stopCapture() {
     // Send the FSEQ Capture Stop command (no arguments required)
-    return sendRestCommand("FSEQ Capture Stop");
+    return capturePlugin_sendRestCommand("FSEQ Capture Stop");
 }
 
-function getCaptureStatus() {
-    // Check status using an appropriate API endpoint if available
-    // Placeholder: Here you would call the appropriate endpoint to get the actual recording status
-    // For example, if FPP exposes a status endpoint like /api/status
-    $url = "http://localhost/api/status";  // Adjust the URL to the actual status endpoint
+// Function to check if recording is active by monitoring the .fseq.capture file
+function capturePlugin_getCaptureStatus() {
+    $directory = "/home/fpp/media/sequences";
+    $filePattern = "*.fseq.capture";
 
-    // Initialize cURL session
-    $ch = curl_init($url);
+    // Find any file that ends with .fseq.capture
+    $files = glob($directory . "/" . $filePattern);
 
-    // Set cURL options
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    if (!empty($files)) {
+        $file = $files[0];  // Assuming only one capture file at a time
+        $fileSize = filesize($file);
 
-    // Execute the request and get the response
-    $response = curl_exec($ch);
+        // Return the file's existence and its size for monitoring
+        return [
+            'recording' => true,
+            'file' => $file,
+            'size' => $fileSize
+        ];
+    }
 
-    // Close the cURL session
-    curl_close($ch);
-
-    // Parse the response and determine if recording is active
-    $data = json_decode($response, true);
-    
-    // Adjust this based on the actual structure of the response from the status endpoint
-    return isset($data['recording']) && $data['recording'] === true;
+    return [
+        'recording' => false,
+        'file' => null,
+        'size' => 0
+    ];
 }
 ?>
