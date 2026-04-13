@@ -7,7 +7,7 @@ debug: all
 
 CFLAGS+=-I.
 OBJECTS_fpp_capture_so += src/FPPCapture.o
-LIBS_fpp_capture_so += -L$(SRCDIR) -lfpp -ljsoncpp -lhttpserver
+LIBS_fpp_capture_so += -L$(SRCDIR) -lfpp -ljsoncpp
 CXXFLAGS_src/FPPCapture.o += -I$(SRCDIR)
 
 

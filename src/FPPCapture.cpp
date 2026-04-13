@@ -11,7 +11,6 @@
 #include <list>
 #include <vector>
 #include <sstream>
-#include <httpserver.hpp>
 #include <SysSocket.h>
 #include <cmath>
 
@@ -30,10 +29,10 @@
 class FPPStartCaptureCommand;
 class FPPStopCaptureCommand;
 
-class FPPCapturePlugin : public FPPPlugins::Plugin, public FPPPlugins::ChannelDataPlugin, public FPPPlugins::APIProviderPlugin {
+class FPPCapturePlugin : public FPPPlugin {
 public:
     
-    FPPCapturePlugin() : FPPPlugins::Plugin("fpp-Capture"), FPPPlugins::ChannelDataPlugin(), FPPPlugins::APIProviderPlugin () {
+    FPPCapturePlugin() : FPPPlugin("fpp-Capture") {
         LogInfo(VB_PLUGIN, "Initializing FPP Capture Plugin\n");
     }
     virtual ~FPPCapturePlugin();
@@ -102,8 +101,8 @@ public:
         header.code[1] = 'p';
         std::string ver = "FPP Capture Plugin";
         int len = strlen(ver.c_str()) + 1;
-        header.data.resize(len);
-        strcpy((char *)&header.data[0], ver.c_str());
+        header.getData().resize(len);
+        strcpy((char *)&header.getData()[0], ver.c_str());
         captureFile->addVariableHeader(header);
 
         uint32_t max = INT32_MAX;
