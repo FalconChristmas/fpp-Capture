@@ -1,12 +1,12 @@
 {
-	"repoName": "fpp-Capture",
-	"name": "FPP Capture",
-	"author": "Daniel Kulp",
-	"description": "Capture e1.31/ArtNet/DDP data to FSEQ files",
-	"homeURL": "https://github.com/FalconChristmas/fpp-Capture",
-	"srcURL": "https://github.com/FalconChristmas/fpp-Capture.git",
-	"bugURL": "https://github.com/FalconChristmas/fpp-Capture/issues",
-	"versions": [
+    "repoName": "fpp-Capture",
+    "name": "FPP Capture",
+    "author": "Daniel Kulp",
+    "description": "Capture e1.31/ArtNet/DDP data to FSEQ files",
+    "homeURL": "https://github.com/FalconChristmas/fpp-Capture",
+    "srcURL": "https://github.com/FalconChristmas/fpp-Capture.git",
+    "bugURL": "https://github.com/FalconChristmas/fpp-Capture/issues",
+    "versions": [
         {
             "minFPPVersion": "7.0",
             "maxFPPVersion": "7.99",
@@ -20,7 +20,13 @@
             "branch": "main",
             "sha": "",
             "allowUpdates": 1
+        },
+        {
+            "minFPPVersion": "10.0",
+            "maxFPPVersion": "0",
+            "branch": "main",
+            "sha": "",
+            "allowUpdates": 1
         }
-	]
+    ]
 }
-
