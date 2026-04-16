@@ -29,10 +29,10 @@
 class FPPStartCaptureCommand;
 class FPPStopCaptureCommand;
 
-class FPPCapturePlugin : public FPPPlugin {
+class FPPCapturePlugin : public FPPPlugins::Plugin, public FPPPlugins::ChannelDataPlugin, public FPPPlugins::APIProviderPlugin {
 public:
     
-    FPPCapturePlugin() : FPPPlugin("fpp-Capture") {
+    FPPCapturePlugin() : FPPPlugins::Plugin("fpp-Capture"), FPPPlugins::ChannelDataPlugin(), FPPPlugins::APIProviderPlugin() {
         LogInfo(VB_PLUGIN, "Initializing FPP Capture Plugin\n");
     }
     virtual ~FPPCapturePlugin();
@@ -160,7 +160,7 @@ void FPPCapturePlugin::addControlCallbacks(std::map<int, std::function<bool(int)
 
 
 extern "C" {
-    FPPCapturePlugin *createPlugin() {
+    FPPPlugins::Plugin *createPlugin() {
         return new FPPCapturePlugin();
     }
 }
