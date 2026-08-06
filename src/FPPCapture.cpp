@@ -37,6 +37,32 @@ public:
     }
     virtual ~FPPCapturePlugin();
 
+    // The two Command subclasses are declared in this plugin, so their vtables
+    // live in its .so and they hold a back-pointer to this object; both are gone
+    // once it is unloaded, so it takes them back itself.
+    void addOwnedCommand(Command* c) {
+        myCommands.push_back(c);
+        CommandManager::INSTANCE.addCommand(c);
+    }
+
+    // Finish a capture that is still running. Unloading mid-capture would
+    // otherwise abandon a half-written .capture file with its header still
+    // claiming 48000 frames, losing the recording; this is the same work the
+    // "FSEQ Capture Stop" command does. Nothing here is asynchronous, so no
+    // readiness predicate is needed.
+    virtual std::function<bool()> shutdown() override {
+        stopCapturing();
+        for (Command* c : myCommands) {
+            // removeCommand() only unregisters - CommandManager deletes what is
+            // still in its registry at shutdown, so taking one back means
+            // owning it again.
+            CommandManager::INSTANCE.removeCommand(c);
+            delete c;
+        }
+        myCommands.clear();
+        return nullptr;
+    }
+
     virtual void modifyChannelData(int ms, uint8_t* seqData) override {
         if (capturing) {
             if (frame == 0) {
@@ -119,9 +145,10 @@ public:
     virtual void addControlCallbacks(std::map<int, std::function<bool(int)>> &callbacks) override;
 
     bool capturing = false;
-    V2FSEQFile *captureFile;
-    uint32_t frame;
-    uint64_t startMS;
+    V2FSEQFile *captureFile = nullptr;
+    uint32_t frame = 0;
+    uint64_t startMS = 0;
+    std::vector<Command*> myCommands;
 };
 
 class FPPStartCaptureCommand : public Command {
@@ -154,10 +181,15 @@ FPPCapturePlugin::~FPPCapturePlugin() {
 }
 
 void FPPCapturePlugin::addControlCallbacks(std::map<int, std::function<bool(int)>> &callbacks) {
-    CommandManager::INSTANCE.addCommand(new FPPStartCaptureCommand(this));
-    CommandManager::INSTANCE.addCommand(new FPPStopCaptureCommand(this));
+    addOwnedCommand(new FPPStartCaptureCommand(this));
+    addOwnedCommand(new FPPStopCaptureCommand(this));
 }
 
+
+// Safe to dlclose() on unload: no threads, no timers, no CurlManager requests,
+// no epoll descriptors and no HTTP routes. shutdown() closes out any capture
+// still running and withdraws the two commands.
+FPP_PLUGIN_SUPPORTS_UNLOAD()
 
 extern "C" {
     FPPPlugins::Plugin *createPlugin() {
