@@ -126,9 +126,9 @@ public:
         header.code[0] = 's';
         header.code[1] = 'p';
         std::string ver = "FPP Capture Plugin";
-        int len = strlen(ver.c_str()) + 1;
-        header.getData().resize(len);
-        strcpy((char *)&header.getData()[0], ver.c_str());
+        std::vector<uint8_t> &data = header.getData();
+        data.assign(ver.begin(), ver.end());
+        data.push_back('\0');
         captureFile->addVariableHeader(header);
 
         uint32_t max = INT32_MAX;

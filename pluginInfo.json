@@ -7,6 +7,8 @@
     "srcURL": "https://github.com/FalconChristmas/fpp-Capture.git",
     "bugURL": "https://github.com/FalconChristmas/fpp-Capture/issues",
     "iconURL": "https://raw.githubusercontent.com/FalconChristmas/fpp-Capture/main/icon.png",
+    "minMemoryMB": 1024,
+    "minCpuCores": 2,
     "versions": [
         {
             "minFPPVersion": "7.0",
