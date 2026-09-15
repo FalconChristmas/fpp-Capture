@@ -38,5 +38,15 @@
             "sha": "",
             "allowUpdates": 1
         }
-    ]
+    ],
+    "privacy": {
+        "summary": "Runs on this device only. Recorded sequences are saved to the sequences folder when you ask.",
+        "sends": [],
+        "collects": [],
+        "sensors": [],
+        "remoteAccess": "none",
+        "systemChanges": [],
+        "closedCode": false,
+        "other": "Captured sequences are saved as ordinary FSEQ files in the sequences folder (/home/fpp/media/sequences/) and stay there, like any other sequence, until you delete them from the Sequences page; uninstalling the plugin does not remove them. It only records when you run the FSEQ Capture Start command and stops on FSEQ Capture Stop."
+    }
 }
