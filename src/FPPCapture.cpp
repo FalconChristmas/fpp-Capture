@@ -13,6 +13,7 @@
 #include <sstream>
 #include <SysSocket.h>
 #include <cmath>
+#include <mutex>
 
 
 #include "FPPCapture.h"
@@ -64,7 +65,8 @@ public:
     }
 
     virtual void modifyChannelData(int ms, uint8_t* seqData) override {
-        if (capturing) {
+        std::unique_lock<std::mutex> lock(captureLock);
+        if (captureFile) {
             if (frame == 0) {
                 startMS = GetTimeMS();
             }
@@ -72,56 +74,90 @@ public:
         }
     }
     void stopCapturing() {
-        if (capturing) {
-            capturing = false;
-            std::string fname = captureFile->getFilename();
-            captureFile->finalize();            
-            delete captureFile;
-            captureFile = nullptr;
+        std::unique_lock<std::mutex> cmdLock(commandLock);
+        // Detach the capture under the lock so the output thread's
+        // modifyChannelData() is never inside addFrame() on a file being
+        // finalized and deleted here. The conversion below then runs unlocked.
+        V2FSEQFile* cf = nullptr;
+        uint32_t frames = 0;
+        uint64_t captureStartMS = 0;
+        {
+            std::unique_lock<std::mutex> lock(captureLock);
+            std::swap(cf, captureFile);
+            frames = frame;
+            captureStartMS = startMS;
+        }
+        if (!cf) {
+            return;
+        }
+        std::string fname = cf->getFilename();
+        cf->finalize();
+        delete cf;
 
-            if (frame) {
-                uint64_t endMS = GetTimeMS();
-                float timing = (endMS - startMS);
-                timing /= frame;
+        if (frames) {
+            uint64_t endMS = GetTimeMS();
+            float timing = (endMS - captureStartMS);
+            timing /= frames;
 
-                FSEQFile *src = FSEQFile::openFSEQFile(fname);
-                V2FSEQFile *dest = (V2FSEQFile*)FSEQFile::createFSEQFile(fname.substr(0, fname.length() - 8),  2, FSEQFile::CompressionType::zstd, 1);
-                dest->initializeFromFSEQ(*src);
-                dest->setStepTime(std::round(timing));
-                dest->setNumFrames(frame);
-                dest->enableMinorVersionFeatures(2);
-                for (auto &r : GetOutputRanges(false)) {
-                    dest->m_sparseRanges.push_back(r);
-                }
-                dest->writeHeader();
-
-                int max = src->getMaxChannel() + 10;
-                uint8_t *data = new uint8_t[max];
-                std::vector<std::pair<uint32_t, uint32_t>> ranges;
-                src->prepareRead(ranges, 0);
-                for (int x = 0; x < frame; x++) {
-                    src->getFrame(x)->readFrame(data,  max);
-                    dest->addFrame(x, data);
-                }
-                dest->finalize();
-                delete dest;
-                delete src;
-
-                unlink(fname.c_str());
+            // On any failure keep the .capture file: it is a complete FSEQ
+            // holding the recording, just with the placeholder header.
+            FSEQFile* src = FSEQFile::openFSEQFile(fname);
+            if (!src) {
+                LogErr(VB_PLUGIN, "Capture: could not reopen %s, leaving it in place\n", fname.c_str());
+                return;
             }
+            std::string destName = fname.substr(0, fname.length() - 8);
+            V2FSEQFile* dest = (V2FSEQFile*)FSEQFile::createFSEQFile(destName, 2, FSEQFile::CompressionType::zstd, 1);
+            if (!dest) {
+                LogErr(VB_PLUGIN, "Capture: could not create %s, leaving the capture in %s\n", destName.c_str(), fname.c_str());
+                delete src;
+                return;
+            }
+            dest->initializeFromFSEQ(*src);
+            dest->setStepTime(std::round(timing));
+            dest->setNumFrames(frames);
+            dest->enableMinorVersionFeatures(2);
+            for (auto& r : GetOutputRanges(false)) {
+                dest->m_sparseRanges.push_back(r);
+            }
+            dest->writeHeader();
+
+            int max = src->getMaxChannel() + 10;
+            uint8_t* data = new uint8_t[max];
+            std::vector<std::pair<uint32_t, uint32_t>> ranges;
+            src->prepareRead(ranges, 0);
+            for (uint32_t x = 0; x < frames; x++) {
+                src->getFrame(x)->readFrame(data, max);
+                dest->addFrame(x, data);
+            }
+            delete[] data;
+            dest->finalize();
+            delete dest;
+            delete src;
+
+            unlink(fname.c_str());
         }
     }
-    bool startCapturing(const std::string &filename) {
-        if (capturing) {
+    bool startCapturing(const std::string& filename) {
+        // The output name is the argument with ".capture" stripped, so an
+        // empty name would try to write the sequence directory itself.
+        if (filename.empty() || filename.find('/') != std::string::npos) {
+            LogErr(VB_PLUGIN, "Capture: invalid FSEQ name '%s'\n", filename.c_str());
             return false;
         }
-        frame = 0;
-        std::string file =  FPP_DIR_SEQUENCE("/" + filename + ".capture");
-        captureFile = (V2FSEQFile*)FSEQFile::createFSEQFile(file, 2, FSEQFile::CompressionType::zstd, -1);
-        captureFile->enableMinorVersionFeatures(2);
-        startMS = GetTimeMS();
-        captureFile->setStepTime(25);
-        captureFile->setNumFrames(48000); //20 minutes of frames, we'll adjust at end
+        std::unique_lock<std::mutex> cmdLock(commandLock);
+        if (captureFile) {
+            return false;
+        }
+        std::string file = FPP_DIR_SEQUENCE("/" + filename + ".capture");
+        V2FSEQFile* cf = (V2FSEQFile*)FSEQFile::createFSEQFile(file, 2, FSEQFile::CompressionType::zstd, -1);
+        if (!cf) {
+            LogErr(VB_PLUGIN, "Capture: could not create %s\n", file.c_str());
+            return false;
+        }
+        cf->enableMinorVersionFeatures(2);
+        cf->setStepTime(25);
+        cf->setNumFrames(48000); //20 minutes of frames, we'll adjust at end
         FSEQFile::VariableHeader header;
         header.code[0] = 's';
         header.code[1] = 'p';
@@ -129,22 +165,30 @@ public:
         std::vector<uint8_t> &data = header.getData();
         data.assign(ver.begin(), ver.end());
         data.push_back('\0');
-        captureFile->addVariableHeader(header);
+        cf->addVariableHeader(header);
 
         uint32_t max = INT32_MAX;
         for (auto &r : GetOutputRanges(false)) {
             max = std::max(max, r.second);
-            captureFile->m_sparseRanges.push_back(r);
+            cf->m_sparseRanges.push_back(r);
         }
-        captureFile->setChannelCount(max);
-        captureFile->writeHeader();
-        capturing = true;
+        cf->setChannelCount(max);
+        cf->writeHeader();
+
+        std::unique_lock<std::mutex> lock(captureLock);
+        frame = 0;
+        startMS = GetTimeMS();
+        captureFile = cf;
         return true;
     }
 
     virtual void addControlCallbacks(std::map<int, std::function<bool(int)>> &callbacks) override;
 
-    bool capturing = false;
+    // captureFile is non-null exactly while a capture is running. commandLock
+    // serializes start/stop; captureLock guards captureFile/frame/startMS
+    // against the output thread's modifyChannelData().
+    std::mutex commandLock;
+    std::mutex captureLock;
     V2FSEQFile *captureFile = nullptr;
     uint32_t frame = 0;
     uint64_t startMS = 0;
